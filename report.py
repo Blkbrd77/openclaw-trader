@@ -15,7 +15,19 @@ REPORTS_DIR = WORKSPACE / "reports"
 FUNDAMENTALS_DIR = WORKSPACE / "fundamentals"
 
 BOT_TOKEN_FILE = Path(os.path.expanduser("~/.openclaw/monitor/chat_id"))
-BOT_TOKEN = "8393345954:AAFCu4s3Xvp8nmSKLfjFx9-uzlw5CRVMiyc"
+BOT_TOKEN = None  # loaded from .env
+
+def load_env():
+    env_file = Path(os.path.expanduser("~/.openclaw/workspace/.env"))
+    env = {}
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                env[key.strip()] = val.strip()
+    return env
+
 
 WATCHLIST = ["AVAV", "KTOS", "JOBY", "ACHR", "TSLA", "COHR"]
 
@@ -315,6 +327,7 @@ def generate_full_report(symbols=None):
 
 
 def send_telegram_report(report_text):
+    BOT_TOKEN = load_env().get("TELEGRAM_BOT_TOKEN", "")
     """Send report summary to Telegram."""
     import urllib.request
 
