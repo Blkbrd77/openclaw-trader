@@ -1,0 +1,79 @@
+name: OpenClaw CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linters
+        run: pip install flake8 pycodestyle
+
+      - name: Run flake8
+        run: flake8 *.py --max-line-length=120 --ignore=E501,W503,E402
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install vaderSentiment pytest
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+        env:
+          OPENCLAW_TEST: "true"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Run bandit security scan
+        run: bandit -r *.py -ll -ii --skip B101,B603,B607,B404
+
+      - name: Check for secrets in code
+        run: |
+          echo "Checking for potential secrets..."
+          # Check for hardcoded API keys, tokens, passwords
+          if grep -rn "sk-ant-\|ghp_\|ALPACA.*=.*[A-Z0-9]\{20,\}" *.py --include="*.py" | grep -v "\.env\|#\|example\|test\|mock"; then
+            echo "WARNING: Potential secrets found in source code!"
+            exit 1
+          fi
+          echo "No secrets detected in source files."
+
+      - name: Check .gitignore covers secrets
+        run: |
+          if ! grep -q "\.env" .gitignore; then
+            echo "ERROR: .env not in .gitignore!"
+            exit 1
+          fi
+          echo ".gitignore properly excludes secrets."
