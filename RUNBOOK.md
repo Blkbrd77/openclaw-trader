@@ -87,13 +87,15 @@ openclaw config set auth.profiles.anthropic:default.key NEW_KEY_HERE
 openclaw doctor
 ```
 
-For **Alpha Vantage / Alpaca keys:**
+For **Alpha Vantage / Alpaca / Telegram keys:**
 ```bash
 nano ~/.openclaw/workspace/.env
 # Update the relevant key
 # ALPHA_VANTAGE_API_KEY=new_key
 # ALPACA_API_KEY=new_key
 # ALPACA_SECRET_KEY=new_secret
+# TELEGRAM_BOT_TOKEN=new_token_from_BotFather
+# NEVER commit this file — it is listed in .gitignore
 ```
 
 For **Jira API token** (on Mac):
@@ -182,8 +184,9 @@ vcgencmd get_throttled
 # Check chat ID exists
 cat ~/.openclaw/monitor/chat_id
 
-# Test manually
-curl -s "https://api.telegram.org/bot8393345954:AAFCu4s3Xvp8nmSKLfjFx9-uzlw5CRVMiyc/getMe"
+# Test manually (token loaded from .env — never hardcode in scripts)
+BOT_TOKEN=$(grep TELEGRAM_BOT_TOKEN ~/.openclaw/workspace/.env | cut -d= -f2)
+curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getMe"
 
 # Check recent errors
 grep -i "telegram" ~/.openclaw/logs/openclaw-app.log | tail -5
@@ -197,7 +200,9 @@ grep -i "telegram" ~/.openclaw/logs/openclaw-app.log | tail -5
 # 3. Note the chat ID from the gateway logs
 
 # If bot token invalid, create new bot via @BotFather on Telegram
-# Update BOT_TOKEN in: ~/bin/openclaw-monitor, trader.py, report.py, costtracker.py
+# Set the new token in ~/.openclaw/workspace/.env:
+#   TELEGRAM_BOT_TOKEN=<new_token_from_BotFather>
+# NEVER commit real tokens to source control.
 ```
 
 **Rollback:** Bot tokens don't expire unless revoked — keep old token as backup

@@ -327,9 +327,12 @@ def generate_full_report(symbols=None):
 
 
 def send_telegram_report(report_text):
-    BOT_TOKEN = load_env().get("TELEGRAM_BOT_TOKEN", "")
     """Send report summary to Telegram."""
     import urllib.request
+    bot_token = load_env().get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env. Skipping.")
+        return
 
     if not BOT_TOKEN_FILE.exists():
         print("No Telegram chat ID configured. Skipping.")
@@ -359,7 +362,7 @@ def send_telegram_report(report_text):
 
     try:
         req = urllib.request.Request(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
             data=data,
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
