@@ -14,7 +14,19 @@ COSTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_DIR = Path(os.path.expanduser("~/.openclaw/logs"))
 
-BOT_TOKEN = "8393345954:AAFCu4s3Xvp8nmSKLfjFx9-uzlw5CRVMiyc"
+BOT_TOKEN = None  # loaded from .env
+
+def load_env():
+    env_file = Path(os.path.expanduser("~/.openclaw/workspace/.env"))
+    env = {}
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                env[key.strip()] = val.strip()
+    return env
+
 CHAT_ID_FILE = Path(os.path.expanduser("~/.openclaw/monitor/chat_id"))
 
 # Cost estimates per API call (conservative estimates)
@@ -202,6 +214,7 @@ def check_alerts():
 
 
 def send_telegram(msg):
+    BOT_TOKEN = load_env().get("TELEGRAM_BOT_TOKEN", "")
     if not CHAT_ID_FILE.exists():
         return
     chat_id = CHAT_ID_FILE.read_text().strip()

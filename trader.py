@@ -15,7 +15,7 @@ TRADES_DIR = WORKSPACE / "trades"
 REPORTS_DIR = WORKSPACE / "reports"
 
 # Telegram config
-BOT_TOKEN = "8393345954:AAFCu4s3Xvp8nmSKLfjFx9-uzlw5CRVMiyc"
+BOT_TOKEN = None  # loaded from .env via load_env()
 CHAT_ID_FILE = Path(os.path.expanduser("~/.openclaw/monitor/chat_id"))
 
 # Alpaca paper trading base URL
@@ -189,6 +189,7 @@ def log_trade(trade_data):
 # --- Telegram Integration (KAN-31) ---
 
 def send_telegram(msg):
+    BOT_TOKEN = load_env().get("TELEGRAM_BOT_TOKEN", "")
     """Send a message via Telegram."""
     if not CHAT_ID_FILE.exists():
         print("No Telegram chat ID configured.")

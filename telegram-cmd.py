@@ -10,7 +10,19 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-BOT_TOKEN = "8393345954:AAFCu4s3Xvp8nmSKLfjFx9-uzlw5CRVMiyc"
+BOT_TOKEN = None  # loaded from .env
+
+def load_env():
+    env_file = Path(os.path.expanduser("~/.openclaw/workspace/.env"))
+    env = {}
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                env[key.strip()] = val.strip()
+    return env
+
 CHAT_ID_FILE = Path(os.path.expanduser("~/.openclaw/monitor/chat_id"))
 STATE_FILE = Path(os.path.expanduser("~/.openclaw/monitor/cmd_last_update_id"))
 
