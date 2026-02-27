@@ -189,8 +189,11 @@ def log_trade(trade_data):
 # --- Telegram Integration (KAN-31) ---
 
 def send_telegram(msg):
-    BOT_TOKEN = load_env().get("TELEGRAM_BOT_TOKEN", "")
     """Send a message via Telegram."""
+    bot_token = load_env().get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env.")
+        return
     if not CHAT_ID_FILE.exists():
         print("No Telegram chat ID configured.")
         return
@@ -202,7 +205,7 @@ def send_telegram(msg):
     }).encode()
     try:
         req = urllib.request.Request(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=data
+            f"https://api.telegram.org/bot{bot_token}/sendMessage", data=data
         )
         urllib.request.urlopen(req, timeout=10)
     except Exception as e:
@@ -242,13 +245,17 @@ def request_approval(symbol, side, qty, price, reasoning):
 
 def wait_for_approval(timeout_seconds=3600):
     """Poll Telegram for approval response. Timeout = 1 hour."""
+    bot_token = load_env().get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env. Auto-rejecting.")
+        return "timeout"
     env = load_env()
     start = time.time()
     last_update_id = 0
 
     while time.time() - start < timeout_seconds:
         try:
-            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=10"
+            url = f"https://api.telegram.org/bot{bot_token}/getUpdates?offset={last_update_id + 1}&timeout=10"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode())

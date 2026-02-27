@@ -89,6 +89,10 @@ def save_last_update_id(uid):
 
 def send_message(chat_id, text):
     """Send a message, splitting if over 4096 chars."""
+    bot_token = load_env().get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env.")
+        return
     chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
     for chunk in chunks:
         data = urllib.parse.urlencode({
@@ -98,7 +102,7 @@ def send_message(chat_id, text):
         }).encode()
         try:
             req = urllib.request.Request(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=data
+                f"https://api.telegram.org/bot{bot_token}/sendMessage", data=data
             )
             urllib.request.urlopen(req, timeout=10)
         except Exception as e:
@@ -140,10 +144,15 @@ def poll_once():
     if not chat_id:
         return
 
+    bot_token = load_env().get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env.")
+        return
+
     last_id = get_last_update_id()
 
     try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_id + 1}&timeout=1"
+        url = f"https://api.telegram.org/bot{bot_token}/getUpdates?offset={last_id + 1}&timeout=1"
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())

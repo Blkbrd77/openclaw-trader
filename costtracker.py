@@ -214,7 +214,10 @@ def check_alerts():
 
 
 def send_telegram(msg):
-    BOT_TOKEN = load_env().get("TELEGRAM_BOT_TOKEN", "")
+    bot_token = load_env().get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env.")
+        return
     if not CHAT_ID_FILE.exists():
         return
     chat_id = CHAT_ID_FILE.read_text().strip()
@@ -223,7 +226,7 @@ def send_telegram(msg):
     }).encode()
     try:
         req = urllib.request.Request(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data=data
+            f"https://api.telegram.org/bot{bot_token}/sendMessage", data=data
         )
         urllib.request.urlopen(req, timeout=10)
     except Exception as e:
