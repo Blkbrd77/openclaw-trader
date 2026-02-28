@@ -6,7 +6,7 @@ import os
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 COSTS_DIR = Path(os.path.expanduser("~/.openclaw/costs"))
@@ -71,7 +71,7 @@ def save_today(data):
 
 def record_api_call(service, endpoint="", tokens_in=0, tokens_out=0):
     """Record an API call for cost tracking."""
-    data = load_today()
+    # load_today() not needed here - scanning app_log directly
 
     if service not in data["services"]:
         data["services"][service] = {
@@ -109,7 +109,7 @@ def scan_logs_for_api_calls():
     if not app_log.exists():
         return 0
 
-    data = load_today()
+    # load_today() not needed here - scanning app_log directly
     today = datetime.now().strftime("%Y-%m-%d")
     counted = 0
 
@@ -156,7 +156,7 @@ def get_weekly_summary():
 
     lines = []
     lines.append("*OPENCLAW WEEKLY COST REPORT*\n")
-    lines.append(f"*Period:* Last 7 days")
+    lines.append("*Period:* Last 7 days")
     lines.append(f"*Total Estimated Cost:* ${total_cost:.4f}")
     lines.append(f"*Total API Calls:* {total_calls}")
     lines.append(f"*Monthly Projection:* ${monthly_projection:.2f}\n")
@@ -184,7 +184,7 @@ def get_weekly_summary():
 
 def check_alerts():
     """Check if cost thresholds are exceeded and send alerts."""
-    data = load_today()
+    # load_today() not needed here - scanning app_log directly
     today_cost = data.get("total_estimated", 0)
     alerts = []
 

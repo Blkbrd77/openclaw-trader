@@ -376,8 +376,6 @@ def send_telegram_report(report_text):
 
 
 if __name__ == "__main__":
-    import urllib.parse
-
     print("OpenClaw Research Report Generator")
     print()
 
