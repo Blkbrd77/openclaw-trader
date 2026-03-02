@@ -120,7 +120,7 @@ def get_latest_price(symbol):
     }
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode())
             return float(data.get("quote", {}).get("ap", 0))
     except Exception:
@@ -207,7 +207,7 @@ def send_telegram(msg):
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{bot_token}/sendMessage", data=data
         )
-        urllib.request.urlopen(req, timeout=10)
+        urllib.request.urlopen(req, timeout=30)
     except Exception as e:
         print(f"Telegram error: {e}")
 
@@ -339,6 +339,273 @@ def get_portfolio_summary():
     return "\n".join(summary)
 
 
+
+
+# --- Automated Signal Analysis ---
+
+SENTIMENT_DIR = WORKSPACE / "sentiment-data"
+MARKET_DIR = WORKSPACE / "market-data"
+
+# Signal thresholds
+BUY_SCORE_THRESHOLD = 0.25    # minimum composite score to buy
+SELL_SCORE_THRESHOLD = -0.30   # sell if score drops below this
+POSITION_SIZE_USD = 20.00      # $20 per trade (fits 5 positions in $100 budget)
+
+
+def get_sentiment_scores(symbol):
+    """Get aggregated sentiment for a symbol from latest data."""
+    today_files = sorted(SENTIMENT_DIR.glob("sentiment_*.json"), reverse=True)
+    if not today_files:
+        return None
+
+    # Use last 3 days of sentiment for stability
+    articles = []
+    for f in today_files[:3]:
+        try:
+            data = json.loads(f.read_text())
+            for article in data:
+                if symbol in article.get("associated_stocks", []):
+                    articles.append(article)
+        except (json.JSONDecodeError, KeyError):
+            continue
+
+    if not articles:
+        return None
+
+    scores = [a["compound_score"] for a in articles]
+    avg_score = sum(scores) / len(scores)
+    positive = sum(1 for s in scores if s > 0.05)
+    negative = sum(1 for s in scores if s < -0.05)
+
+    return {
+        "avg_score": avg_score,
+        "num_articles": len(articles),
+        "positive": positive,
+        "negative": negative,
+        "ratio": positive / max(positive + negative, 1),
+    }
+
+
+def get_price_momentum(symbol):
+    """Calculate price momentum from market data."""
+    market_file = MARKET_DIR / f"{symbol}.json"
+    if not market_file.exists():
+        return None
+
+    try:
+        data = json.loads(market_file.read_text())
+        daily = data.get("daily", [])
+        if len(daily) < 5:
+            return None
+
+        current = daily[0]["close"]
+        week_ago = daily[min(4, len(daily) - 1)]["close"]
+        month_ago = daily[min(19, len(daily) - 1)]["close"]
+
+        week_return = (current - week_ago) / week_ago
+        month_return = (current - month_ago) / month_ago
+
+        # Count up days vs down days over last 10
+        changes = []
+        for i in range(min(10, len(daily) - 1)):
+            changes.append(daily[i]["close"] - daily[i + 1]["close"])
+        up_days = sum(1 for c in changes if c > 0)
+        down_days = sum(1 for c in changes if c < 0)
+
+        return {
+            "current_price": current,
+            "week_return": week_return,
+            "month_return": month_return,
+            "up_days": up_days,
+            "down_days": down_days,
+        }
+    except (json.JSONDecodeError, KeyError, IndexError):
+        return None
+
+
+def score_stock(symbol):
+    """Generate a composite trading score for a stock.
+
+    Score components (range roughly -1 to +1):
+    - Sentiment: 40% weight (avg compound score)
+    - Momentum: 30% weight (weekly return normalized)
+    - Mean reversion: 30% weight (oversold + positive sentiment = buy)
+    """
+    sentiment = get_sentiment_scores(symbol)
+    momentum = get_price_momentum(symbol)
+
+    if not sentiment or not momentum:
+        return None
+
+    # Sentiment component (already -1 to +1)
+    sent_score = sentiment["avg_score"]
+
+    # Momentum: weekly return clamped to [-0.1, 0.1] then scaled to [-1, 1]
+    mom_score = max(-1, min(1, momentum["week_return"] * 10))
+
+    # Mean reversion: dip + positive sentiment = buy signal
+    reversion_score = 0
+    if momentum["month_return"] < -0.05 and sent_score > 0.1:
+        reversion_score = min(1, abs(momentum["month_return"]) * 5)
+    elif momentum["month_return"] > 0.15 and sent_score < -0.1:
+        reversion_score = -min(1, momentum["month_return"] * 3)
+
+    composite = (sent_score * 0.40) + (mom_score * 0.30) + (reversion_score * 0.30)
+
+    return {
+        "symbol": symbol,
+        "composite": round(composite, 4),
+        "sentiment": round(sent_score, 4),
+        "momentum": round(mom_score, 4),
+        "reversion": round(reversion_score, 4),
+        "price": momentum["current_price"],
+        "articles": sentiment["num_articles"],
+        "week_return": f"{momentum['week_return']*100:+.1f}%",
+        "month_return": f"{momentum['month_return']*100:+.1f}%",
+    }
+
+
+def cmd_analyze(dry_run=False):
+    """Analyze watchlist and execute trades based on signals.
+
+    Paper trading mode: auto-executes (no Telegram approval polling
+    to avoid 409 conflict with gateway). All trades logged + Telegram summary.
+    """
+    print(f"\n=== OpenClaw Signal Analysis ({datetime.now().strftime('%Y-%m-%d %H:%M')}) ===\n")
+
+    scores = []
+    for symbol in WATCHLIST:
+        result = score_stock(symbol)
+        if result:
+            scores.append(result)
+            signal = "BUY" if result["composite"] >= BUY_SCORE_THRESHOLD else \
+                     "SELL" if result["composite"] <= SELL_SCORE_THRESHOLD else "HOLD"
+            print(f"  {symbol:5s}  score={result['composite']:+.3f}  "
+                  f"sent={result['sentiment']:+.3f}  mom={result['momentum']:+.3f}  "
+                  f"rev={result['reversion']:+.3f}  "
+                  f"${result['price']:.2f}  ({result['week_return']} wk)  -> {signal}")
+        else:
+            print(f"  {symbol:5s}  insufficient data")
+
+    if not scores:
+        print("\nNo actionable data.")
+        return
+
+    # Get current positions and account
+    account = get_account()
+    positions = get_positions()
+    if isinstance(positions, dict):
+        positions = []
+    held_symbols = {p["symbol"] for p in positions}
+    cash = float(account.get("cash", 0))
+    portfolio_value = float(account.get("portfolio_value", 0))
+
+    actions = []
+    telegram_lines = ["*SIGNAL ANALYSIS*\n"]
+
+    # SELL signals on held positions
+    for score in scores:
+        if score["symbol"] in held_symbols and score["composite"] <= SELL_SCORE_THRESHOLD:
+            actions.append(("sell", score))
+
+    # BUY signals on stocks we don't hold
+    buy_candidates = [s for s in scores
+                      if s["composite"] >= BUY_SCORE_THRESHOLD
+                      and s["symbol"] not in held_symbols]
+    buy_candidates.sort(key=lambda x: x["composite"], reverse=True)
+    available_slots = MAX_POSITIONS - len(held_symbols)
+    for candidate in buy_candidates[:available_slots]:
+        actions.append(("buy", candidate))
+
+    if not actions:
+        msg = "No signals exceeded thresholds today."
+        print(f"\n  {msg}")
+        for s in scores:
+            telegram_lines.append(f"  {s['symbol']}: {s['composite']:+.3f} (HOLD)")
+        telegram_lines.append(f"\n_{msg}_")
+        send_telegram("\n".join(telegram_lines))
+        return
+
+    # Execute trades
+    print(f"\n--- Executing {len(actions)} trade(s) ---\n")
+    for side, score in actions:
+        symbol = score["symbol"]
+        price = score["price"]
+
+        if side == "buy":
+            # Calculate invested amount from actual positions (not Alpaca paper balance)
+            invested = sum(abs(float(p.get("market_value", 0))) for p in positions)
+            budget = min(POSITION_SIZE_USD, MAX_PORTFOLIO_VALUE - invested)
+            if budget < 1:
+                print(f"  SKIP {symbol}: insufficient budget (${budget:.2f})")
+                continue
+            qty = round(budget / price, 4)
+            if qty * price < 1:
+                print(f"  SKIP {symbol}: order too small")
+                continue
+        else:
+            pos = next((p for p in positions if p["symbol"] == symbol), None)
+            if not pos:
+                continue
+            qty = float(pos["qty"])
+
+        trade_value = qty * price
+        reasoning = (f"Composite score {score['composite']:+.3f} "
+                     f"(sentiment={score['sentiment']:+.3f}, "
+                     f"momentum={score['momentum']:+.3f}, "
+                     f"reversion={score['reversion']:+.3f})")
+
+        print(f"  {side.upper()} {qty:.4f} x {symbol} @ ~${price:.2f} = ${trade_value:.2f}")
+        print(f"    {reasoning}")
+
+        if dry_run:
+            print("    [DRY RUN - not executed]")
+            telegram_lines.append(f"  {side.upper()} {qty:.4f} x {symbol} @ ${price:.2f} (DRY RUN)")
+            log_trade({"type": "dry_run", "symbol": symbol, "side": side,
+                       "qty": qty, "price": price, "score": score["composite"],
+                       "reasoning": reasoning})
+            continue
+
+        # Submit order (notional for fractional shares)
+        order_data = {
+            "symbol": symbol,
+            "notional": str(round(trade_value, 2)),
+            "side": side,
+            "type": "market",
+            "time_in_force": "day",
+        }
+        result = alpaca_request("POST", "/orders", order_data)
+
+        if "error" not in result:
+            log_trade({
+                "type": "executed",
+                "symbol": symbol,
+                "side": side,
+                "qty": qty,
+                "price": price,
+                "value": trade_value,
+                "score": score["composite"],
+                "reasoning": reasoning,
+                "order_id": result.get("id"),
+                "status": result.get("status"),
+            })
+            telegram_lines.append(
+                f"  *{side.upper()}* {qty:.4f} x {symbol} @ ${price:.2f} "
+                f"(score: {score['composite']:+.3f})")
+            print(f"    Order submitted: {result.get('status')}")
+            if side == "buy":
+                cash -= trade_value
+                portfolio_value += trade_value
+        else:
+            print(f"    FAILED: {result.get('error', 'unknown')}")
+            log_trade({"type": "failed", "symbol": symbol, "side": side,
+                       "qty": qty, "error": result.get("error")})
+            telegram_lines.append(f"  FAILED {side.upper()} {symbol}")
+
+    send_telegram("\n".join(telegram_lines))
+    print("\nAnalysis complete. Summary sent to Telegram.")
+
+
 # --- Main Commands ---
 
 def cmd_status():
@@ -449,6 +716,8 @@ def print_usage():
     print("                                        - Propose a trade (requires approval)")
     print("  python3 trader.py summary              - Send daily summary to Telegram")
     print("  python3 trader.py test                 - Run connection test")
+    print("  python3 trader.py analyze              - Analyze signals and auto-trade")
+    print("  python3 trader.py analyze --dry-run     - Analyze without executing")
     print()
 
 
@@ -481,6 +750,9 @@ if __name__ == "__main__":
         cmd_test()
     elif cmd == "summary":
         cmd_daily_summary()
+    elif cmd == "analyze":
+        dry_run = "--dry-run" in sys.argv
+        cmd_analyze(dry_run=dry_run)
     elif cmd == "propose":
         if len(sys.argv) < 5:
             print("Usage: trader.py propose SYMBOL buy|sell QTY [reasoning]")
