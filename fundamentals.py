@@ -200,8 +200,6 @@ def fetch_officers_sec(symbol):
                 break
 
         # SEC doesn't give officers directly in the JSON — pull from company info
-        name = data.get("name", "")
-        former_names = [n.get("name", "") for n in data.get("formerNames", [])]
 
         # Officers are in the top-level if available
         if "officers" in data:

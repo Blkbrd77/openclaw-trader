@@ -236,7 +236,7 @@ def request_approval(symbol, side, qty, price, reasoning):
         "status": "pending_approval",
     })
 
-    print(f"\nTrade proposal sent to Telegram. Waiting for approval...")
+    print("\nTrade proposal sent to Telegram. Waiting for approval...")
     print(f"  {side.upper()} {qty} x {symbol} @ ${price:.2f} = ${trade_value:.2f}")
     print(f"  Reasoning: {reasoning}")
 
@@ -249,7 +249,6 @@ def wait_for_approval(timeout_seconds=3600):
     if not bot_token:
         print("Telegram not configured: TELEGRAM_BOT_TOKEN missing from .env. Auto-rejecting.")
         return "timeout"
-    env = load_env()
     start = time.time()
     last_update_id = 0
 
@@ -309,7 +308,6 @@ def get_portfolio_summary():
             qty = float(p["qty"])
             avg_entry = float(p["avg_entry_price"])
             current = float(p["current_price"])
-            market_val = float(p["market_value"])
             unrealized = float(p["unrealized_pl"])
             unrealized_pct = float(p["unrealized_plpc"]) * 100
             total_unrealized += unrealized
@@ -328,7 +326,7 @@ def get_portfolio_summary():
     orders = get_orders("closed")
     if isinstance(orders, list) and orders:
         recent = orders[:5]
-        summary.append(f"\n*Recent Orders:*")
+        summary.append("\n*Recent Orders:*")
         for o in recent:
             filled_qty = o.get("filled_qty", "0")
             filled_price = o.get("filled_avg_price") or "N/A"
