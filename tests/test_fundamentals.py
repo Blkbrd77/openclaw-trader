@@ -40,8 +40,9 @@ def test_safe_float_invalid():
     assert safe_float("not_a_number") is None
 
 
-def test_cache_freshness():
+def test_cache_freshness(tmp_path, monkeypatch):
     from fundamentals import is_cache_fresh
+    monkeypatch.setattr("fundamentals.FUNDAMENTALS_DIR", tmp_path)
     # Non-existent symbol should not be fresh
     assert is_cache_fresh("ZZZZZ") is False
 

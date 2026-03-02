@@ -46,8 +46,19 @@ def test_json_formatter_with_context():
     assert data["context"]["symbol"] == "TSLA"
 
 
-def test_get_logger():
-    from logger import get_logger
-    logger = get_logger("unit_test")
-    assert logger is not None
-    assert logger.name == "openclaw.unit_test"
+def test_get_logger(tmp_path, monkeypatch):
+    import logger as logger_module
+
+    monkeypatch.setattr(logger_module, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(logger_module, "APP_LOG", tmp_path / "app.log")
+    monkeypatch.setattr(logger_module, "ERROR_LOG", tmp_path / "error.log")
+    monkeypatch.setattr(logger_module, "TRADE_LOG", tmp_path / "trade.log")
+
+    logger = logger_module.get_logger("unit_test")
+    try:
+        assert logger is not None
+        assert logger.name == "openclaw.unit_test"
+    finally:
+        for handler in list(logger.handlers):
+            handler.close()
+            logger.removeHandler(handler)

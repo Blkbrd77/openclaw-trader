@@ -40,8 +40,6 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
-        env:
-          OPENCLAW_TEST: "true"
 
   security:
     name: Security Scan
@@ -64,7 +62,7 @@ jobs:
         run: |
           echo "Checking for potential secrets..."
           # Check for hardcoded API keys, tokens, passwords
-          if grep -rn "sk-ant-\|ghp_\|ALPACA.*=.*[A-Z0-9]\{20,\}" . --include="*.py" | grep -v "\.env\|#\|example\|test\|mock"; then
+          if grep -rn --include="*.py" --exclude-dir="tests" -e "sk-ant-\|ghp_\|ALPACA.*=.*[A-Z0-9]\{20,\}" .; then
             echo "WARNING: Potential secrets found in source code!"
             exit 1
           fi
