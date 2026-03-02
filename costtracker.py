@@ -71,7 +71,7 @@ def save_today(data):
 
 def record_api_call(service, endpoint="", tokens_in=0, tokens_out=0):
     """Record an API call for cost tracking."""
-    # load_today() not needed here - scanning app_log directly
+    data = load_today()
 
     if service not in data["services"]:
         data["services"][service] = {
@@ -109,7 +109,6 @@ def scan_logs_for_api_calls():
     if not app_log.exists():
         return 0
 
-    # load_today() not needed here - scanning app_log directly
     today = datetime.now().strftime("%Y-%m-%d")
     counted = 0
 
@@ -184,7 +183,7 @@ def get_weekly_summary():
 
 def check_alerts():
     """Check if cost thresholds are exceeded and send alerts."""
-    # load_today() not needed here - scanning app_log directly
+    data = load_today()
     today_cost = data.get("total_estimated", 0)
     alerts = []
 

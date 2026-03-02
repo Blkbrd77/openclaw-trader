@@ -1,10 +1,5 @@
 """Tests for OpenClaw sentiment analyzer."""
 
-import sys
-import os
-
-# Add workspace to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def test_classify_positive():
