@@ -182,7 +182,12 @@ def generate_stock_report(symbol):
             signal = "NEUTRAL"
 
         report.append(f"**Sentiment:** {signal} (score: {avg:+.3f})")
-        report.append(f"**Breakdown:** {pos} positive / {neg} negative / {neu} neutral ({len(sentiment_results)} articles)")
+        news_count = sum(1 for r in sentiment_results if r.get("source") != "X/Twitter")
+        x_count = sum(1 for r in sentiment_results if r.get("source") == "X/Twitter")
+        source_label = f"{news_count} news"
+        if x_count:
+            source_label += f" + {x_count} tweets"
+        report.append(f"**Breakdown:** {pos} positive / {neg} negative / {neu} neutral ({source_label})")
     else:
         report.append("**Sentiment:** No data available")
 
@@ -198,6 +203,17 @@ def generate_stock_report(symbol):
             report.append(f"   _Source: {source}_")
     else:
         report.append("**Headlines:** No recent articles found")
+
+    # X/Twitter sentiment
+    x_results = [r for r in sentiment_results if r.get("source") == "X/Twitter"] if sentiment_results else []
+    if x_results:
+        top_x = sorted(x_results, key=lambda r: r.get("engagement", 0), reverse=True)[:3]
+        report.append("")
+        report.append("**Top X/Twitter Posts:**")
+        for i, tweet in enumerate(top_x, 1):
+            text = tweet.get("text", "")[:80]
+            score = tweet.get("compound_score", 0)
+            report.append(f"{i}. [{score:+.3f}] {text}")
 
     report.append("")
 
